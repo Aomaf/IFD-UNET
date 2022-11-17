@@ -4,6 +4,8 @@ from PIL import Image
 import uvicorn
 import tensorflow as tf
 import cv2
+import io
+from starlette.responses import StreamingResponse
 
 app = FastAPI()
 MODEL = tf.keras.models.load_model('../savedModels/1')
@@ -35,26 +37,28 @@ def Image_input_preprocess(image_file):
     # print(image.shape)
     return image
 
-def prediction_output_Image_processing(img):
-    print(img)
-    im = cv2.imwrite("result Image", img)
-    cv2.imshow('image',im)
+def prediction_output_Image_viewer(pred_im):
+    cv2.imshow('iamge', pred_im)
     cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
+
+# ===============Prediction End Point======================
 @app.post("/predict")
 async def predect(file: UploadFile= File(...)):
     uploaded_image_bytes = await file.read()
     image_file = read_files_as_images(uploaded_image_bytes) 
     image_batch = Image_input_preprocess(image_file) #preparing image as a batch by adding a diminsion to be provided to the model.predict
     model_image = np.expand_dims(image_batch,0)
-    prediction_res = MODEL.predict(model_image)
-    # p_reshape = np.squeeze(prediction_res, axis=0)
-    cv2.imshow('iamge', prediction_res[0].astype(np.uint8)*255)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    prediction_res = MODEL.predict(model_image) 
 
-    # prediction_output_Image_processing(prediction_res)
+    p_mask = prediction_res[0].astype(np.uint8)*255
+    predictedMusk = cv2.resize(p_mask ,(512,512))
     
+    # prediction_output_Image_viewer(predictedMusk)
+
+    res, img_png  = cv2.imencode(".png", p_mask)
+    return StreamingResponse(io.BytesIO(img_png.tobytes()), media_type="image/png")
 
 
 if __name__ == "__main__":
